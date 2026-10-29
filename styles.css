@@ -1,0 +1,50 @@
+.todo-panel-add {
+  width: 100%;
+  margin-bottom: var(--size-4-2);
+}
+
+.todo-panel-item {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: var(--size-2-2) 0;
+}
+
+.todo-panel-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.todo-panel-item.is-done .todo-panel-text {
+  text-decoration: line-through;
+  color: var(--text-faint);
+}
+
+.todo-panel-delete {
+  color: var(--text-muted);
+  opacity: 0;
+}
+
+.todo-panel-item:hover .todo-panel-delete {
+  opacity: 1;
+}
+
+.todo-panel-handle {
+  cursor: grab;
+  color: var(--text-faint);
+  user-select: none;
+  line-height: 1;
+}
+
+.todo-panel-item.is-dragging {
+  opacity: 0.4;
+}
+
+.todo-panel-item.drop-before {
+  box-shadow: 0 -2px 0 var(--interactive-accent);
+}
+
+.todo-panel-item.drop-after {
+  box-shadow: 0 2px 0 var(--interactive-accent);
+}

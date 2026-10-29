@@ -1,0 +1,9 @@
+{
+  "id": "todo-panel",
+  "name": "Todo Panel",
+  "version": "0.1.0",
+  "minAppVersion": "1.9.0",
+  "description": "A side panel with a simple todo list, stored as notes and shown in an Obsidian Base.",
+  "author": "Yannick Vergeylen",
+  "isDesktopOnly": false
+}
