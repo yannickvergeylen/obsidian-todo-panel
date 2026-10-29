@@ -9,6 +9,7 @@ An [Obsidian](https://obsidian.md) plugin that adds a side panel with a simple t
 - Two storage modes, switchable in settings:
   - **Base**: one note per todo, listed in a generated `Todos.base`
   - **Markdown file**: one file with `- [ ] task` lines
+- Optional organization, switchable in settings: a plain list, **groups** or **tags**
 - Changes made outside the panel (editing the file, the Base, or the notes) show up in the panel
 
 ## Usage
@@ -22,6 +23,19 @@ Open the panel from the ribbon checkbox icon, or run **Open todo panel** from th
 | Check | Tick the checkbox |
 | Delete | Click the × that appears on hover (Base mode moves the note to trash) |
 | Reorder | Drag the `⋮⋮` handle and drop above or below another todo |
+| Tag | Type `#tag` in the add box or while editing a todo (when Organization is Groups or Tags) |
+
+## Organization
+
+| Mode | Behaviour |
+| --- | --- |
+| None (default) | A plain list. `#` text is left alone. |
+| Groups | One tag per todo, shown under group headers (click a header to collapse). Untagged todos go under "Ungrouped". Drop a todo on another group's rows or header to move it. |
+| Tags | Any number of tags per todo, shown as colored labels. The color comes from the tag name. |
+
+Both modes use the same stored tags, so switching loses nothing: Groups shows only the first tag and keeps the rest. Editing a todo's tags in Groups mode replaces all of its tags with the one you typed. Typing `#` in the add box suggests existing tags.
+
+Tags are stored as the `tags` property in Base mode and as trailing `#tags` on the task line in Markdown mode (`- [ ] Buy milk #home #errand`). With Organization set to None, Markdown lines are shown unchanged.
 
 ## Storage modes
 
@@ -58,6 +72,7 @@ Switching modes does not convert anything; each mode keeps its own todos.
 | Setting | Description |
 | --- | --- |
 | Storage | Base or Markdown file |
+| Organization | None, Groups or Tags (see above) |
 | Todo folder | Folder for todo notes (Base mode, default `Todos`) |
 | Todo file | Path of the markdown file (Markdown mode, default `Todos.md`) |
 
@@ -83,13 +98,13 @@ npm run dev     # rebuild on save
 npm run build   # type-check and produce main.js
 ```
 
-Source is in `src/main.ts`. With the files symlinked into your vault, reload Obsidian (Cmd/Ctrl+P → "Reload app without saving") to pick up a rebuild.
+Source is in `src/` (`main.ts` is the plugin entry). With the files symlinked into your vault, reload Obsidian (Cmd/Ctrl+P → "Reload app without saving") to pick up a rebuild.
 
 ## Known limitations
 
 - Drag and drop uses desktop drag events and likely doesn't work on touch devices
-- No tags, priorities or grouping yet
+- No filtering or priorities yet
 
 ## Roadmap
 
-Prioritizing, tagging and grouping. Because todos are notes with properties in Base mode, these can be added as extra properties.
+Filtering by tag and prioritizing. Because todos are notes with properties in Base mode, these can be added as extra properties.

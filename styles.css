@@ -48,3 +48,76 @@
 .todo-panel-item.drop-after {
   box-shadow: 0 2px 0 var(--interactive-accent);
 }
+
+.todo-panel-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-2-1);
+}
+
+.todo-panel-tag {
+  padding: 0 var(--size-4-2);
+  border-radius: var(--radius-m);
+  font-size: var(--font-ui-smaller);
+  background: hsl(var(--tag-hue) 65% 50% / 0.18);
+  color: hsl(var(--tag-hue) 55% 38%);
+}
+
+.theme-dark .todo-panel-tag {
+  color: hsl(var(--tag-hue) 70% 72%);
+}
+
+.todo-panel-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-2-1);
+  margin-bottom: var(--size-4-2);
+}
+
+.todo-panel-suggest:empty {
+  display: none;
+}
+
+.todo-panel-tag.is-suggestion {
+  cursor: pointer;
+}
+
+.todo-panel-group-header {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: var(--size-2-2) 0;
+  margin-top: var(--size-4-2);
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-weight: var(--font-semibold);
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.todo-panel-group-header.drop-target {
+  background: var(--background-modifier-hover);
+  box-shadow: 0 2px 0 var(--interactive-accent);
+}
+
+.todo-panel-group-name {
+  flex: 1;
+}
+
+.todo-panel-group-count {
+  font-weight: normal;
+  color: var(--text-faint);
+}
+
+.todo-panel-group-arrow {
+  display: inline-block;
+  transition: transform 0.1s;
+}
+
+.todo-panel-group.is-collapsed .todo-panel-group-arrow {
+  transform: rotate(-90deg);
+}
+
+.todo-panel-group.is-collapsed .todo-panel-group-body {
+  display: none;
+}

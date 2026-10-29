@@ -1,7 +1,7 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type TodoPanelPlugin from "./main";
 import { DEFAULT_SETTINGS } from "./types";
-import type { StorageMode } from "./types";
+import type { Organize, StorageMode } from "./types";
 
 export class TodoSettingTab extends PluginSettingTab {
   constructor(app: App, private plugin: TodoPanelPlugin) {
@@ -25,6 +25,28 @@ export class TodoSettingTab extends PluginSettingTab {
             settings.mode = value as StorageMode;
             await this.plugin.saveSettings();
             this.display();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Organization")
+      .setDesc(
+        createFragment((f) => {
+          f.createDiv({ text: "None: a plain list." });
+          f.createDiv({ text: "Groups: one tag per todo, shown under group headers." });
+          f.createDiv({ text: "Tags: any number of tags per todo, shown as colored labels." });
+          f.createDiv({ text: "Add tags by typing #tag in a todo. Switching keeps stored tags." });
+        })
+      )
+      .addDropdown((dd) =>
+        dd
+          .addOption("none", "None")
+          .addOption("groups", "Groups")
+          .addOption("tags", "Tags")
+          .setValue(settings.organize)
+          .onChange(async (value) => {
+            settings.organize = value as Organize;
+            await this.plugin.saveSettings();
           })
       );
 

@@ -36,10 +36,10 @@ export default class TodoPanelPlugin extends Plugin {
 
   /** Rebuilds the store from the current settings and redraws open panels. */
   updateStore() {
-    const { mode, folder, markdownFile } = this.settings;
+    const { mode, folder, markdownFile, organize } = this.settings;
     this.store =
       mode === "markdown"
-        ? new MarkdownStore(this.app, normalizePath(markdownFile))
+        ? new MarkdownStore(this.app, normalizePath(markdownFile), organize !== "none")
         : new BaseStore(this.app, normalizePath(folder));
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
       (leaf.view as TodoView).render();

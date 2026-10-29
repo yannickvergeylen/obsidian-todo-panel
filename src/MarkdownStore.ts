@@ -1,11 +1,19 @@
 import { App, TFile } from "obsidian";
+import { joinTags, splitTrailingTags } from "./tags";
 import type { Todo, TodoStore } from "./types";
 
 const TASK_LINE = /^(\s*[-*] \[)([ xX])(\] )(.*)$/;
 
-/** One markdown file with a `- [ ] task` line per todo. */
+/**
+ * One markdown file with a `- [ ] task` line per todo. Tags are the `#tags`
+ * trailing the line; with `parseTags` off they stay part of the title.
+ */
 export class MarkdownStore implements TodoStore {
-  constructor(private app: App, private path: string) {}
+  constructor(private app: App, private path: string, private parseTags: boolean) {}
+
+  private split(text: string) {
+    return this.parseTags ? splitTrailingTags(text) : { title: text, tags: [] as string[] };
+  }
 
   isRelevant(path: string) {
     return path === this.path;
@@ -28,7 +36,9 @@ export class MarkdownStore implements TodoStore {
     const todos: Todo[] = [];
     (await this.app.vault.cachedRead(file)).split("\n").forEach((line, i) => {
       const m = TASK_LINE.exec(line);
-      if (m) todos.push({ id: String(i), title: m[4], done: m[2] !== " " });
+      if (!m) return;
+      const { title, tags } = this.split(m[4]);
+      todos.push({ id: String(i), title, done: m[2] !== " ", tags });
     });
     return todos;
   }
@@ -48,16 +58,22 @@ export class MarkdownStore implements TodoStore {
     });
   }
 
-  async add(title: string) {
+  async add(title: string, tags: string[]) {
     const file = await this.ensureFile();
+    const text = this.parseTags ? joinTags(title, tags) : title;
     await this.app.vault.process(file, (data) => {
       const sep = data === "" || data.endsWith("\n") ? "" : "\n";
-      return `${data}${sep}- [ ] ${title}\n`;
+      return `${data}${sep}- [ ] ${text}\n`;
     });
   }
 
   setTitle(todo: Todo, title: string) {
-    return this.editLine(todo, (m) => m[1] + m[2] + m[3] + title);
+    return this.editLine(todo, (m) => m[1] + m[2] + m[3] + joinTags(title, this.split(m[4]).tags));
+  }
+
+  async setTags(todo: Todo, tags: string[]) {
+    if (!this.parseTags) return;
+    await this.editLine(todo, (m) => m[1] + m[2] + m[3] + joinTags(this.split(m[4]).title, tags));
   }
 
   setDone(todo: Todo, done: boolean) {

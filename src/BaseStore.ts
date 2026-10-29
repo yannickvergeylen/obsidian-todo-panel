@@ -1,4 +1,5 @@
 import { App, TFile, TFolder, normalizePath } from "obsidian";
+import { normalizeTags } from "./tags";
 import type { Todo, TodoStore } from "./types";
 
 /** One note per todo (frontmatter properties), listed by a Base file. */
@@ -29,6 +30,8 @@ export class BaseStore implements TodoStore {
       "    displayName: Todo",
       "  note.done:",
       "    displayName: Done",
+      "  note.tags:",
+      "    displayName: Tags",
       "  note.created:",
       "    displayName: Created",
       "views:",
@@ -40,6 +43,7 @@ export class BaseStore implements TodoStore {
       "    order:",
       "      - note.title",
       "      - note.done",
+      "      - note.tags",
       "      - note.created",
       "",
     ].join("\n");
@@ -58,6 +62,7 @@ export class BaseStore implements TodoStore {
         id: child.path,
         title: String(fm.title ?? child.basename),
         done: fm.done === true,
+        tags: normalizeTags(fm.tags),
         order: Number(fm.order ?? fm.created ?? child.stat.ctime),
       });
     }
@@ -69,12 +74,22 @@ export class BaseStore implements TodoStore {
     return f instanceof TFile ? f : null;
   }
 
-  async add(title: string) {
+  async add(title: string, tags: string[]) {
     await this.ensureFolder();
     const created = Date.now();
     const path = normalizePath(`${this.folder}/${created}.md`);
-    const content = `---\ntitle: ${JSON.stringify(title)}\ndone: false\ncreated: ${created}\norder: ${created}\n---\n`;
+    const tagLine = tags.length ? `tags: ${JSON.stringify(tags)}\n` : "";
+    const content = `---\ntitle: ${JSON.stringify(title)}\ndone: false\n${tagLine}created: ${created}\norder: ${created}\n---\n`;
     await this.app.vault.create(path, content);
+  }
+
+  async setTags(todo: Todo, tags: string[]) {
+    const file = this.file(todo);
+    if (!file) return;
+    await this.app.fileManager.processFrontMatter(file, (fm) => {
+      if (tags.length) fm.tags = tags;
+      else delete fm.tags;
+    });
   }
 
   async setTitle(todo: Todo, title: string) {
