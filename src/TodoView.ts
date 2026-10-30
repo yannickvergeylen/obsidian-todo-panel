@@ -1,4 +1,4 @@
-import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
+import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import type TodoPanelPlugin from "./main";
 import { groupName } from "./groups";
 import { joinTags, parseInput, sameTags, tagHue } from "./tags";
@@ -10,6 +10,8 @@ export class TodoView extends ItemView {
   private collapsed = new Set<string>();
   /** Group chosen in the add box. */
   private addGroup?: string;
+  /** Id of the latest render; older, slower renders drop their result. */
+  private renderId = 0;
 
   constructor(leaf: WorkspaceLeaf, private plugin: TodoPanelPlugin) {
     super(leaf);
@@ -31,7 +33,6 @@ export class TodoView extends ItemView {
     const refresh = (file: { path: string }) => {
       if (this.plugin.store.isRelevant(file.path)) this.render();
     };
-    this.registerEvent(this.app.metadataCache.on("changed", refresh));
     this.registerEvent(this.app.vault.on("modify", refresh));
     this.registerEvent(this.app.vault.on("create", refresh));
     this.registerEvent(this.app.vault.on("delete", refresh));
@@ -43,21 +44,21 @@ export class TodoView extends ItemView {
     return this.plugin.settings.tags;
   }
 
-  /** Groups exist for Markdown storage only. */
   private get groups(): TodoGroup[] {
-    const { mode, groups } = this.plugin.settings;
-    return mode === "markdown" ? groups : [];
+    return this.plugin.settings.groups;
   }
 
-  /** Tags shown (and edited) in the current mode. */
+  /** Tags shown (and edited) while Tags is on. */
   private visibleTags(todo: Todo) {
     return this.tagsOn ? todo.tags : [];
   }
 
   /** Splits typed text into title and tags; without tags `#` text is left alone. */
   private parse(text: string) {
-    if (!this.tagsOn) return { title: text.trim(), tags: [] as string[] };
-    return parseInput(text, Infinity);
+    // Pasted line breaks would otherwise write extra lines into the file.
+    const oneLine = text.replace(/\s*\n\s*/g, " ");
+    if (!this.tagsOn) return { title: oneLine.trim(), tags: [] as string[] };
+    return parseInput(oneLine, Infinity);
   }
 
   /** The group new todos go to: the chosen one, else the first. */
@@ -66,22 +67,41 @@ export class TodoView extends ItemView {
     return groups.find((g) => g.path === this.addGroup)?.path ?? groups[0]?.path;
   }
 
+  /** Runs a store change; on failure shows why and redraws from the files. */
+  private async run(change: () => Promise<unknown>) {
+    try {
+      await change();
+    } catch (err) {
+      new Notice(`Todo panel: ${err instanceof Error ? err.message : err}`);
+      this.render();
+    }
+  }
+
   async render() {
     const root = this.contentEl;
-    // Keep an in-progress edit from being clobbered by a refresh.
-    if (root.querySelector(".todo-panel-text:focus")) return;
+    const renderId = ++this.renderId;
     const todos = await this.plugin.store.list();
+    // Skip when a newer render started meanwhile, and keep an in-progress edit
+    // from being clobbered by a refresh (checked after the await: focus can arrive during it).
+    if (renderId !== this.renderId || root.querySelector(".todo-panel-text:focus")) return;
+
+    // The add box is rebuilt too; carry over what was typed and its focus.
+    const previous = root.querySelector<HTMLInputElement>(".todo-panel-add");
+    const typed = previous?.value ?? "";
+    const hadFocus = !!previous && previous === document.activeElement;
     root.empty();
     root.addClass("todo-panel");
 
-    this.renderAddInput(root, todos);
+    const input = this.renderAddInput(root, todos);
+    input.value = typed;
+    if (hadFocus) input.focus();
 
     const list = root.createDiv({ cls: "todo-panel-list" });
     if (this.groups.length > 1) this.renderGroups(list, todos);
     else for (const todo of todos) this.renderTodo(list, list, todo, todos);
   }
 
-  private renderAddInput(root: HTMLElement, todos: Todo[]) {
+  private renderAddInput(root: HTMLElement, todos: Todo[]): HTMLInputElement {
     const row = root.createDiv({ cls: "todo-panel-add-row" });
     const input = row.createEl("input", {
       cls: "todo-panel-add",
@@ -93,8 +113,18 @@ export class TodoView extends ItemView {
       select.value = this.currentAddGroup() ?? "";
       select.addEventListener("change", () => (this.addGroup = select.value));
     }
+    if (this.plugin.settings.showSettingsButton) {
+      // Not a view header action: Obsidian hides those in sidebar panes.
+      const settingsButton = row.createEl("button", {
+        cls: "todo-panel-settings clickable-icon",
+        attr: { "aria-label": "Open todo panel settings" },
+      });
+      setIcon(settingsButton, "settings");
+      settingsButton.addEventListener("click", () => this.plugin.openSettings());
+    }
     const suggest = root.createDiv({ cls: "todo-panel-suggest" });
-    const known = [...new Map(todos.flatMap((t) => this.visibleTags(t)).map((t) => [t.toLowerCase(), t])).values()];
+    const known = new Map<string, string>();
+    for (const todo of todos) for (const tag of this.visibleTags(todo)) known.set(tag.toLowerCase(), tag);
 
     input.addEventListener("input", () => {
       suggest.empty();
@@ -104,7 +134,11 @@ export class TodoView extends ItemView {
       const prefix = partial[1].toLowerCase();
       const used = new Set(this.parse(input.value).tags.map((t) => t.toLowerCase()));
       const start = input.value.length - partial[1].length - 1;
-      for (const tag of known.filter((t) => t.toLowerCase().startsWith(prefix) && !used.has(t.toLowerCase())).slice(0, 6)) {
+      const matches = [...known]
+        .filter(([key]) => key.startsWith(prefix) && !used.has(key))
+        .map(([, tag]) => tag)
+        .slice(0, 6);
+      for (const tag of matches) {
         const chip = suggest.createSpan({ cls: "todo-panel-tag is-suggestion", text: tag });
         chip.style.setProperty("--tag-hue", String(tagHue(tag)));
         // mousedown keeps focus in the input.
@@ -123,12 +157,9 @@ export class TodoView extends ItemView {
       if (!title) return;
       input.value = "";
       suggest.empty();
-      try {
-        await this.plugin.store.add(title, tags, this.currentAddGroup());
-      } catch (err) {
-        new Notice(`Could not add todo: ${err}`);
-      }
+      await this.run(() => this.plugin.store.add(title, tags, this.currentAddGroup()));
     });
+    return input;
   }
 
   /** Renders a collapsible section per group, in settings order. */
@@ -159,7 +190,7 @@ export class TodoView extends ItemView {
         e.preventDefault();
         header.removeClass("drop-target");
         const dragged = todos.find((t) => t.id === e.dataTransfer?.getData("text/plain"));
-        if (dragged) await this.plugin.store.move?.(dragged, group.path, null);
+        if (dragged) await this.run(() => this.plugin.store.move(dragged, group.path, null));
       });
 
       const body = section.createDiv({ cls: "todo-panel-group-body" });
@@ -204,21 +235,22 @@ export class TodoView extends ItemView {
       row.removeClasses(["drop-before", "drop-after"]);
       if (!draggedId || draggedId === todo.id) return;
       const dragged = todos.find((t) => t.id === draggedId);
-      if (dragged && todo.group && dragged.group !== todo.group) {
+      if (!dragged) return;
+      if (dragged.group !== todo.group) {
         // Dropping onto a row of another group moves the todo there, next to that row.
         const siblings = todos.filter((t) => t.group === todo.group);
-        const beforeId = after ? siblings[siblings.indexOf(todo) + 1]?.id ?? null : todo.id;
-        await this.plugin.store.move?.(dragged, todo.group, beforeId);
+        const before = after ? siblings[siblings.indexOf(todo) + 1] ?? null : todo;
+        await this.run(() => this.plugin.store.move(dragged, todo.group, before));
         return;
       }
-      const ids = todos.map((t) => t.id).filter((id) => id !== draggedId);
-      ids.splice(ids.indexOf(todo.id) + (after ? 1 : 0), 0, draggedId);
-      await this.plugin.store.reorder(ids);
+      const order = todos.filter((t) => t !== dragged);
+      order.splice(order.indexOf(todo) + (after ? 1 : 0), 0, dragged);
+      await this.run(() => this.plugin.store.reorder(order));
     });
 
     const check = row.createEl("input", { attr: { type: "checkbox" } });
     check.checked = todo.done;
-    check.addEventListener("change", () => this.plugin.store.setDone(todo, check.checked));
+    check.addEventListener("change", () => this.run(() => this.plugin.store.setDone(todo, check.checked)));
 
     const text = row.createEl("span", {
       cls: "todo-panel-text",
@@ -258,8 +290,12 @@ export class TodoView extends ItemView {
         this.render();
         return;
       }
-      if (title !== todo.title) await this.plugin.store.setTitle(todo, title);
-      if (tagsChanged) await this.plugin.store.setTags(todo, tags);
+      await this.run(() =>
+        this.plugin.store.update(todo, {
+          title: title !== todo.title ? title : undefined,
+          tags: tagsChanged ? tags : undefined,
+        })
+      );
     });
 
     if (this.tagsOn && todo.tags.length) {
@@ -275,6 +311,6 @@ export class TodoView extends ItemView {
       attr: { "aria-label": "Delete todo" },
     });
     del.setText("×");
-    del.addEventListener("click", () => this.plugin.store.remove(todo));
+    del.addEventListener("click", () => this.run(() => this.plugin.store.remove(todo)));
   }
 }

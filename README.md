@@ -1,17 +1,14 @@
 # Todo Panel
 
-An [Obsidian](https://obsidian.md) plugin that adds a side panel with a simple todo list. Todos are stored in your vault, either as notes listed by an Obsidian Base or as checkbox lines in a single markdown file.
+An [Obsidian](https://obsidian.md) plugin that adds a side panel with a simple todo list. Todos are checkbox lines in markdown files in your vault, so they stay plain text you can open, link and search like any other note.
 
 ## Features
 
 - Side panel (right sidebar) with add, edit, check and delete
 - Drag and drop to reorder
-- Two storage modes, switchable in settings:
-  - **Base**: one note per todo, listed in a generated `Todos.base`
-  - **Markdown files**: `- [ ] task` lines, one file per group
-- **Groups** (Markdown mode): every group is a file in your vault, with an optional alias
+- **Groups**: every group is a markdown file in your vault, with an optional alias
 - Optional **tags**, shown as colored labels
-- Changes made outside the panel (editing the file, the Base, or the notes) show up in the panel
+- Changes made outside the panel (editing a group file) show up in the panel, except while you are editing a todo there (it refreshes when you leave the field)
 
 ## Usage
 
@@ -22,69 +19,51 @@ Open the panel from the ribbon checkbox icon, or run **Open todo panel** from th
 | Add | Type in the input at the top and press Enter |
 | Edit | Click the todo text, then Enter to save or Esc to cancel |
 | Check | Tick the checkbox |
-| Delete | Click the × that appears on hover (Base mode moves the note to trash) |
+| Delete | Click the × that appears on hover (the line is removed from its file) |
 | Reorder | Drag the `⋮⋮` handle and drop above or below another todo |
 | Move to a group | Drag the handle onto another group's header (end of the group) or onto one of its todos |
 | Tag | Type `#tag` in the add box or while editing a todo (when Tags is on) |
 
 ## Groups
 
-Groups are available with Markdown storage and are always on. A group is a markdown file in your vault; its `- [ ]` lines are the todos, and everything else in the file is left alone. With more than one group the panel shows a collapsible header per group (in the order set in settings) and a group picker next to the add box.
-
-The first group is created for you with the first free name from `Todos`, `Tasks`, `To-do`, `To do`, `Todo list`, `Task list`, `Checklist`, `Action items`, `Open tasks`, `Backlog` (`Todos.md`, `Tasks.md`, ...), so it never clashes with an existing note. The file itself is created when you add the first todo. Add more groups in settings by picking an existing markdown file or typing a new path. A group shows its file name unless you give it an alias. Removing a group only removes it from the list; the file stays. Renaming or moving a group file in Obsidian updates the group.
-
-Moving a todo between groups moves its line from one file to the other.
-
-## Tags
-
-An optional setting. When on, todos can carry any number of `#tags`, shown as colored labels (the color comes from the tag name). Typing `#` in the add box suggests existing tags. While editing a todo its tags appear as `#tag` text after the title.
-
-Tags are stored as the `tags` property in Base mode and as trailing `#tags` on the task line in Markdown mode (`- [ ] Buy milk #home #errand`). With Tags off, tags in the file are left as they are and shown as part of the title in Markdown mode.
-
-## Storage modes
-
-### Base (default)
-
-Each todo is a note in the todo folder (default `Todos/`) with these properties:
-
-```yaml
----
-title: "Buy milk"
-done: false
-created: 1761750000000
-order: 1761750000000
----
-```
-
-The first time you add a todo, the plugin creates `Todos/Todos.base`, a table view of the folder sorted by `order`. An existing `Todos.base` is never overwritten. If you want it sorted by order, add a sort on `note.order` ascending, or delete it so it gets recreated.
-
-### Markdown files
-
-Todos live in one file per group (see Groups), for example `Todos.md`:
+A group is a markdown file in your vault; its `- [ ]` lines are the todos, and everything else in the file is left alone:
 
 ```markdown
 - [ ] Buy milk
 - [x] Call the dentist
 ```
 
-Reordering moves the task lines. Other content in the file is left alone.
+Any `- [ ]` or `* [ ]` line counts as a todo, including indented sub-tasks and lines inside code blocks. Files with Windows (CRLF) line endings work too.
 
-Switching modes does not convert anything; each mode keeps its own todos.
+With more than one group the panel shows a collapsible header per group (in the order set in settings) and a group picker next to the add box. With a single group it shows a plain list.
+
+The first group is created for you with the first free name from `Todos`, `Tasks`, `To-do`, `To do`, `Todo list`, `Task list`, `Checklist`, `Action items`, `Open tasks`, `Backlog` (`Todos.md`, `Tasks.md`, ...; if all are taken, `Todos 2.md`, `Todos 3.md`, ...), so it never clashes with an existing note. The name is saved in the settings, so it stays put once chosen. The file itself is created when you add the first todo. Add more groups in settings by picking an existing markdown file or typing a new path. A group shows its file name unless you give it an alias. Removing a group only removes it from the list; the file stays. Renaming or moving a group file, or a folder holding it, in Obsidian updates the group.
+
+Reordering moves the task lines within a file. Moving a todo between groups moves its line from one file to the other: it is written to the target first, so a failure can't lose it (at worst it ends up in both).
+
+Every change checks that the todo's line is still what the panel showed. If the file was edited in between, the change is refused with a notice and the panel refreshes, so an outdated list can never change another todo. Other failures, such as a file that can't be created, also show a notice.
+
+## Tags
+
+An optional setting. When on, todos can carry any number of `#tags`, shown as colored labels (the color comes from the tag name). Typing `#` in the add box suggests existing tags. While editing a todo its tags appear as `#tag` text after the title.
+
+Tags are the `#tags` trailing the task line (`- [ ] Buy milk #home #errand`). With Tags off, tags in the file are left as they are and shown as part of the title.
 
 ## Settings
 
 | Setting | Description |
 | --- | --- |
-| Storage | Base or Markdown files |
 | Tags | Allow `#tags` on todos |
-| Todo folder | Folder for todo notes (Base mode, default `Todos`) |
-| Groups | Group files with optional alias, order and removal, plus add (Markdown mode) |
+| Settings button | Show a gear button next to the add box that opens these settings (off by default; handy while developing) |
+| Groups | Group files with optional alias, order and removal, plus add |
+
+Settings from earlier versions are upgraded on load: a single todo file becomes the first group, and group paths are normalised. The removed Base storage mode is ignored; todo notes it created stay in your vault untouched but are no longer shown.
 
 ## Installation
 
 The plugin is not published to the community plugin list, so install it manually.
 
-Requires Obsidian 1.9.0 or newer (Bases support).
+Requires Obsidian 1.4.10 or newer.
 
 ```bash
 git clone <repo-url> obsidian-todo-panel
@@ -104,12 +83,6 @@ npm run build   # type-check and produce main.js
 
 Source is in `src/` (`main.ts` is the plugin entry). With the files symlinked into your vault, reload Obsidian (Cmd/Ctrl+P → "Reload app without saving") to pick up a rebuild.
 
-## Known limitations
-
-- Drag and drop uses desktop drag events and likely doesn't work on touch devices
-- Groups are not available in Base mode
-- No filtering or priorities yet
-
 ## Roadmap
 
-Filtering by tag and prioritizing. Because todos are notes with properties in Base mode, these can be added as extra properties.
+Filtering by tag and prioritizing.

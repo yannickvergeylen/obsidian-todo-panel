@@ -2,8 +2,6 @@ import { App, Notice, PluginSettingTab, Setting, normalizePath } from "obsidian"
 import type TodoPanelPlugin from "./main";
 import { FileSuggest } from "./FileSuggest";
 import { groupName } from "./groups";
-import { DEFAULT_SETTINGS } from "./types";
-import type { StorageMode } from "./types";
 
 export class TodoSettingTab extends PluginSettingTab {
   constructor(app: App, private plugin: TodoPanelPlugin) {
@@ -16,21 +14,6 @@ export class TodoSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     new Setting(containerEl)
-      .setName("Storage")
-      .setDesc("Base: one note per todo, listed in a Base file. Markdown: checkbox lines in one file per group.")
-      .addDropdown((dd) =>
-        dd
-          .addOption("base", "Base (note per todo)")
-          .addOption("markdown", "Markdown files")
-          .setValue(settings.mode)
-          .onChange(async (value) => {
-            settings.mode = value as StorageMode;
-            await this.plugin.saveSettings();
-            this.display();
-          })
-      );
-
-    new Setting(containerEl)
       .setName("Tags")
       .setDesc("Give todos any number of #tags, shown as colored labels. Type #tag when adding or editing a todo.")
       .addToggle((toggle) =>
@@ -40,18 +23,15 @@ export class TodoSettingTab extends PluginSettingTab {
         })
       );
 
-    if (settings.mode === "base") {
-      new Setting(containerEl)
-        .setName("Todo folder")
-        .setDesc("Each todo is a note in this folder; a Base file lists them. Groups are not available in this mode.")
-        .addText((text) =>
-          text.setValue(settings.folder).onChange(async (value) => {
-            settings.folder = value.trim() || DEFAULT_SETTINGS.folder;
-            await this.plugin.saveSettings();
-          })
-        );
-      return;
-    }
+    new Setting(containerEl)
+      .setName("Settings button")
+      .setDesc("Show a gear button next to the add box that opens these settings.")
+      .addToggle((toggle) =>
+        toggle.setValue(settings.showSettingsButton).onChange(async (value) => {
+          settings.showSettingsButton = value;
+          await this.plugin.saveSettings();
+        })
+      );
 
     this.displayGroups(containerEl);
   }
@@ -129,8 +109,8 @@ export class TodoSettingTab extends PluginSettingTab {
           .setButtonText("Add")
           .setCta()
           .onClick(async () => {
-            let normalized = normalizePath(path.trim());
             if (!path.trim()) return;
+            let normalized = normalizePath(path.trim());
             if (!/\.md$/i.test(normalized)) normalized += ".md";
             if (settings.groups.some((g) => normalizePath(g.path).toLowerCase() === normalized.toLowerCase())) {
               new Notice("That file is already a group.");

@@ -1,14 +1,13 @@
 import { Plugin, normalizePath } from "obsidian";
-import { BaseStore } from "./BaseStore";
 import { MarkdownStore } from "./MarkdownStore";
 import { TodoSettingTab } from "./TodoSettingTab";
 import { TodoView } from "./TodoView";
 import { defaultGroupPath } from "./groups";
-import { DEFAULT_SETTINGS, VIEW_TYPE } from "./types";
-import type { TodoSettings, TodoStore } from "./types";
+import { VIEW_TYPE } from "./types";
+import type { TodoGroup, TodoSettings, TodoStore } from "./types";
 
 export default class TodoPanelPlugin extends Plugin {
-  settings: TodoSettings = DEFAULT_SETTINGS;
+  settings!: TodoSettings;
   store!: TodoStore;
 
   async onload() {
@@ -24,32 +23,53 @@ export default class TodoPanelPlugin extends Plugin {
     });
     this.addSettingTab(new TodoSettingTab(this.app, this));
 
-    // Keep a group pointing at its file when the file is renamed or moved.
+    // Keep groups pointing at their files when a file, or a folder holding them, is renamed or moved.
     this.registerEvent(
       this.app.vault.on("rename", async (file, oldPath) => {
-        const group = this.settings.groups.find((g) => normalizePath(g.path) === oldPath);
-        if (!group) return;
-        group.path = file.path;
-        await this.saveSettings();
+        let changed = false;
+        for (const group of this.settings.groups) {
+          const path = normalizePath(group.path);
+          if (path === oldPath || path.startsWith(`${oldPath}/`)) {
+            group.path = file.path + path.slice(oldPath.length);
+            changed = true;
+          }
+        }
+        if (changed) await this.saveSettings();
       })
     );
   }
 
-  /** Loads settings, upgrading older versions (single `markdownFile`, `organize`). */
+  /** Loads settings, upgrading older versions (single `markdownFile`, `organize`, Base `mode`). */
   private async loadSettings() {
     const data = (await this.loadData()) ?? {};
     const hasGroups = Array.isArray(data.groups);
-    this.settings = {
-      mode: data.mode ?? DEFAULT_SETTINGS.mode,
-      folder: data.folder ?? DEFAULT_SETTINGS.folder,
-      tags: data.tags ?? data.organize === "tags",
-      groups: hasGroups ? data.groups : data.markdownFile ? [{ path: normalizePath(data.markdownFile) }] : [],
-    };
-    // Groups are always on: make sure there is a first one.
-    if (!this.settings.groups.length) {
-      this.settings.groups.push({ path: defaultGroupPath(this.app, []) });
+    const stored: unknown[] = hasGroups ? data.groups : data.markdownFile ? [{ path: data.markdownFile }] : [];
+    const groups: TodoGroup[] = [];
+    for (const entry of stored as Partial<TodoGroup>[]) {
+      if (typeof entry?.path !== "string" || !entry.path.trim()) continue;
+      const path = normalizePath(entry.path);
+      // Duplicate paths would give duplicate todo ids.
+      if (groups.some((g) => g.path === path)) continue;
+      groups.push({ path, alias: typeof entry.alias === "string" ? entry.alias : undefined });
     }
-    if (!hasGroups) await this.saveData(this.settings);
+    // Groups are always on: make sure there is a first one.
+    const addedDefault = !groups.length;
+    if (addedDefault) groups.push({ path: defaultGroupPath(this.app, []) });
+
+    this.settings = {
+      tags: data.tags ?? data.organize === "tags",
+      showSettingsButton: data.showSettingsButton === true,
+      groups,
+    };
+    // Persist the default so its name stays put once its file exists.
+    if (!hasGroups || addedDefault || groups.length !== stored.length) await this.saveData(this.settings);
+  }
+
+  /** Opens Obsidian's settings on this plugin's tab (`app.setting` is not in the public typings). */
+  openSettings() {
+    const { setting } = this.app as unknown as { setting: { open(): void; openTabById(id: string): void } };
+    setting.open();
+    setting.openTabById(this.manifest.id);
   }
 
   async activateView() {
@@ -64,17 +84,15 @@ export default class TodoPanelPlugin extends Plugin {
 
   /** Rebuilds the store from the current settings and redraws open panels. */
   updateStore() {
-    const { mode, folder, groups, tags } = this.settings;
-    this.store =
-      mode === "markdown"
-        ? new MarkdownStore(
-            this.app,
-            groups.map((g) => normalizePath(g.path)),
-            tags
-          )
-        : new BaseStore(this.app, normalizePath(folder));
+    const { groups, tags } = this.settings;
+    this.store = new MarkdownStore(
+      this.app,
+      groups.map((g) => normalizePath(g.path)),
+      tags
+    );
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
-      (leaf.view as TodoView).render();
+      // Background tabs may hold a lazy-loaded placeholder instead of the view.
+      if (leaf.view instanceof TodoView) leaf.view.render();
     }
   }
 
