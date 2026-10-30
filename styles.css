@@ -65,16 +65,18 @@
   gap: var(--size-2-1);
 }
 
+/* --tag-color is set inline when the user picked a color; otherwise it derives from --tag-hue per theme. */
 .todo-panel-tag {
+  --tag-color: hsl(var(--tag-hue) 55% 38%);
   padding: 0 var(--size-4-2);
   border-radius: var(--radius-m);
   font-size: var(--font-ui-smaller);
-  background: hsl(var(--tag-hue) 65% 50% / 0.18);
-  color: hsl(var(--tag-hue) 55% 38%);
+  background: color-mix(in srgb, var(--tag-color) 18%, transparent);
+  color: var(--tag-color);
 }
 
 .theme-dark .todo-panel-tag {
-  color: hsl(var(--tag-hue) 70% 72%);
+  --tag-color: hsl(var(--tag-hue) 70% 72%);
 }
 
 .todo-panel-suggest {

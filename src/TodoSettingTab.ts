@@ -1,25 +1,34 @@
-import { App, Notice, PluginSettingTab, Setting, normalizePath } from "obsidian";
+import { App, ExtraButtonComponent, Notice, PluginSettingTab, Setting, debounce, normalizePath } from "obsidian";
 import type TodoPanelPlugin from "./main";
 import { FileSuggest } from "./FileSuggest";
 import { groupName } from "./groups";
+import { TAG_MARKER, defaultTagColor } from "./tags";
 
 export class TodoSettingTab extends PluginSettingTab {
   constructor(app: App, private plugin: TodoPanelPlugin) {
     super(app, plugin);
   }
 
+  /** Id of the latest `display()`; the async tag list drops its result if a newer one started. */
+  private displayId = 0;
+
   display() {
     const { containerEl } = this;
     const settings = this.plugin.settings;
+    const displayId = ++this.displayId;
     containerEl.empty();
 
     new Setting(containerEl)
       .setName("Tags")
-      .setDesc("Give todos any number of #tags, shown as colored labels. Type #tag when adding or editing a todo.")
+      .setDesc(
+        "Give todos any number of @tags (todo.txt style), shown as colored labels. Type @tag when adding or editing a todo. " +
+          "Obsidian does not treat @tags as note tags."
+      )
       .addToggle((toggle) =>
         toggle.setValue(settings.tags).onChange(async (value) => {
           settings.tags = value;
           await this.plugin.saveSettings();
+          this.display(); // shows or hides the tag colors
         })
       );
 
@@ -34,6 +43,72 @@ export class TodoSettingTab extends PluginSettingTab {
       );
 
     this.displayGroups(containerEl);
+    if (settings.tags) {
+      this.displayTagColors(containerEl, displayId).catch((err) => new Notice(`Could not list tags: ${err}`));
+    }
+  }
+
+  /** Lists the tags found in the group files, each with a color picker. */
+  private async displayTagColors(containerEl: HTMLElement, displayId: number) {
+    const settings = this.plugin.settings;
+    const todos = await this.plugin.store.list();
+    // The settings may have been redrawn while the files were read.
+    if (displayId !== this.displayId) return;
+
+    // Tag key (lowercase) -> display name and the number of todos using it.
+    const tags = new Map<string, { name: string; count: number }>();
+    for (const todo of todos) {
+      for (const tag of todo.tags) {
+        const entry = tags.get(tag.toLowerCase()) ?? { name: tag, count: 0 };
+        entry.count++;
+        tags.set(tag.toLowerCase(), entry);
+      }
+    }
+    // Keep tags whose color was set but that no todo uses (any more), so the color can be removed.
+    for (const key of Object.keys(settings.tagColors)) if (!tags.has(key)) tags.set(key, { name: key, count: 0 });
+
+    new Setting(containerEl)
+      .setName("Tag colors")
+      .setDesc(
+        "Colors for the @tags in your group files, with the number of todos using each. " +
+          "Tags without a choice get a color derived from their name; the color of a tag no todo uses can be removed."
+      )
+      .setHeading();
+    if (!tags.size) {
+      containerEl.createEl("p", { text: "No tags yet.", cls: "setting-item-description" });
+      return;
+    }
+
+    // The picker reports every step of a drag; save once it settles.
+    const saveSettled = debounce(() => this.plugin.saveSettings(), 300, true);
+    const dark = document.body.hasClass("theme-dark");
+    for (const [key, { name, count }] of [...tags].sort(([a], [b]) => a.localeCompare(b))) {
+      let reset: ExtraButtonComponent;
+      // Only a tag that no todo uses is removed from the list; a used one just goes back to its default color.
+      const unused = count === 0;
+      new Setting(containerEl)
+        .setName(`${TAG_MARKER}${name}`)
+        .setDesc(unused ? "Not used by any todo" : `${count} ${count === 1 ? "todo" : "todos"}`)
+        .addColorPicker((picker) =>
+          picker.setValue(settings.tagColors[key] ?? defaultTagColor(name, dark)).onChange((value) => {
+            settings.tagColors[key] = value;
+            reset.setDisabled(false);
+            saveSettled();
+          })
+        )
+        .addExtraButton((button) => {
+          reset = button;
+          button
+            .setIcon(unused ? "trash" : "rotate-ccw")
+            .setTooltip(unused ? "Remove this color" : "Reset to the default color")
+            .setDisabled(!(key in settings.tagColors))
+            .onClick(async () => {
+              delete settings.tagColors[key];
+              await this.plugin.saveSettings();
+              this.display();
+            });
+        });
+    }
   }
 
   private displayGroups(containerEl: HTMLElement) {

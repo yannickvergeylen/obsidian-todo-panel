@@ -56,8 +56,15 @@ export default class TodoPanelPlugin extends Plugin {
     const addedDefault = !groups.length;
     if (addedDefault) groups.push({ path: defaultGroupPath(this.app, []) });
 
+    // No prototype, so tags named like `constructor` or `__proto__` are ordinary keys.
+    const tagColors: Record<string, string> = Object.create(null);
+    for (const [tag, color] of Object.entries(data.tagColors ?? {})) {
+      if (typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color)) tagColors[tag.toLowerCase()] = color;
+    }
+
     this.settings = {
       tags: data.tags ?? data.organize === "tags",
+      tagColors,
       showSettingsButton: data.showSettingsButton === true,
       groups,
     };

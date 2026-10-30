@@ -1,7 +1,7 @@
 import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import type TodoPanelPlugin from "./main";
 import { groupName } from "./groups";
-import { joinTags, parseInput, sameTags, tagHue } from "./tags";
+import { TAG_MARKER, joinTags, parseInput, sameTags, tagHue } from "./tags";
 import { VIEW_TYPE } from "./types";
 import type { Todo, TodoGroup } from "./types";
 
@@ -53,12 +53,19 @@ export class TodoView extends ItemView {
     return this.tagsOn ? todo.tags : [];
   }
 
-  /** Splits typed text into title and tags; without tags `#` text is left alone. */
+  /** Colors a tag label: the chosen color if any, else a hue derived from the name (adapts to the theme). */
+  private styleTag(el: HTMLElement, tag: string) {
+    const color = this.plugin.settings.tagColors[tag.toLowerCase()];
+    if (color) el.style.setProperty("--tag-color", color);
+    else el.style.setProperty("--tag-hue", String(tagHue(tag)));
+  }
+
+  /** Splits typed text into title and tags; without tags `@` text is left alone. */
   private parse(text: string) {
     // Pasted line breaks would otherwise write extra lines into the file.
     const oneLine = text.replace(/\s*\n\s*/g, " ");
     if (!this.tagsOn) return { title: oneLine.trim(), tags: [] as string[] };
-    return parseInput(oneLine, Infinity);
+    return parseInput(oneLine);
   }
 
   /** The group new todos go to: the chosen one, else the first. */
@@ -105,7 +112,7 @@ export class TodoView extends ItemView {
     const row = root.createDiv({ cls: "todo-panel-add-row" });
     const input = row.createEl("input", {
       cls: "todo-panel-add",
-      attr: { type: "text", placeholder: this.tagsOn ? "Add a todo… (#tag)" : "Add a todo…" },
+      attr: { type: "text", placeholder: this.tagsOn ? `Add a todo… (${TAG_MARKER}tag)` : "Add a todo…" },
     });
     if (this.groups.length > 1) {
       const select = row.createEl("select", { cls: "dropdown todo-panel-add-group" });
@@ -129,7 +136,7 @@ export class TodoView extends ItemView {
     input.addEventListener("input", () => {
       suggest.empty();
       if (!this.tagsOn) return;
-      const partial = /(?:^|\s)#([^\s#]*)$/.exec(input.value);
+      const partial = new RegExp(`(?:^|\\s)${TAG_MARKER}([^\\s${TAG_MARKER}]*)$`).exec(input.value);
       if (!partial) return;
       const prefix = partial[1].toLowerCase();
       const used = new Set(this.parse(input.value).tags.map((t) => t.toLowerCase()));
@@ -140,11 +147,11 @@ export class TodoView extends ItemView {
         .slice(0, 6);
       for (const tag of matches) {
         const chip = suggest.createSpan({ cls: "todo-panel-tag is-suggestion", text: tag });
-        chip.style.setProperty("--tag-hue", String(tagHue(tag)));
+        this.styleTag(chip, tag);
         // mousedown keeps focus in the input.
         chip.addEventListener("mousedown", (e) => {
           e.preventDefault();
-          input.value = `${input.value.slice(0, start)}#${tag} `;
+          input.value = `${input.value.slice(0, start)}${TAG_MARKER}${tag} `;
           suggest.empty();
           input.focus();
         });
@@ -258,7 +265,7 @@ export class TodoView extends ItemView {
       attr: { contenteditable: "plaintext-only", spellcheck: "false" },
     });
     let cancelled = false;
-    // While editing, tags show as `#tag` text after the title.
+    // While editing, tags show as `@tag` text after the title.
     text.addEventListener("focus", () => {
       if (!this.tagsOn) return;
       text.textContent = joinTags(todo.title, this.visibleTags(todo));
@@ -302,7 +309,7 @@ export class TodoView extends ItemView {
       const tagList = row.createDiv({ cls: "todo-panel-tags" });
       for (const tag of todo.tags) {
         const pill = tagList.createSpan({ cls: "todo-panel-tag", text: tag });
-        pill.style.setProperty("--tag-hue", String(tagHue(tag)));
+        this.styleTag(pill, tag);
       }
     }
 

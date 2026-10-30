@@ -1,5 +1,5 @@
 import { App, TFile } from "obsidian";
-import { joinTags, splitTrailingTags } from "./tags";
+import { joinTags, splitTags } from "./tags";
 import type { Todo, TodoStore } from "./types";
 
 // The last group captures a trailing `\r`, so files with CRLF line endings work.
@@ -20,7 +20,8 @@ function parseId(id: string) {
 
 /**
  * Markdown files (one per group) with a `- [ ] task` line per todo. Tags are
- * the `#tags` trailing the line; with `parseTags` off they stay in the title.
+ * the `@tags` anywhere in the line (todo.txt style); with `parseTags` off they stay in the title.
+ * Rewriting a line moves its tags to the end.
  *
  * Every write checks that the todo's line still reads as it did when listed
  * (`Todo.raw`), so an outdated line number can't hit another todo.
@@ -29,7 +30,7 @@ export class MarkdownStore implements TodoStore {
   constructor(private app: App, private groups: string[], private parseTags: boolean) {}
 
   private split(text: string) {
-    return this.parseTags ? splitTrailingTags(text) : { title: text, tags: [] as string[] };
+    return this.parseTags ? splitTags(text) : { title: text, tags: [] as string[] };
   }
 
   isRelevant(path: string) {

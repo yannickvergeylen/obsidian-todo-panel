@@ -1,15 +1,23 @@
-// A tag needs at least one non-digit character, like in Obsidian (`#123` is not a tag).
-const TAG = "[\\p{L}\\p{N}_\\-/]*[\\p{L}_\\-/][\\p{L}\\p{N}_\\-/]*";
-const TAG_ANYWHERE = new RegExp(`(^|\\s)#(${TAG})`, "gu");
-const TAG_AT_END = new RegExp(`(?:^|\\s+)#(${TAG})$`, "u");
+/**
+ * Tags are todo.txt `@context` words: `@` plus non-space characters, preceded by whitespace, anywhere in
+ * the line. They are deliberately not Obsidian's `#tags`, so they stay out of the vault's tag list.
+ */
+export const TAG_MARKER = "@";
 
-/** Cleans raw tag values: strips `#`, drops empties and case-insensitive duplicates. */
-export function normalizeTags(raw: unknown): string[] {
-  const values = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split(/[,\s]+/) : [];
+// The lead whitespace keeps `me@example.com` from counting as a tag. A tag runs up to whitespace or the end
+// and can't contain `@`, a backtick, `]` or `)`: an `@word` right before a link's or code span's closing is
+// not a tag. This is only a rough guard; links and code spans are not parsed, so an `@word` elsewhere inside
+// one still counts.
+// The lead whitespace run is consumed whole, so removing a tag leaves the rest of the whitespace untouched.
+// The lookbehind makes a match start at the beginning of a run (otherwise long runs backtrack quadratically).
+const TAG_ANYWHERE = new RegExp(`(?<!\\s)(^|\\s+)${TAG_MARKER}([^\\s${TAG_MARKER}\`\\])]+)(?=\\s|$)`, "gu");
+
+/** Cleans tag values: drops empties and case-insensitive duplicates, keeping the first spelling. */
+export function normalizeTags(raw: string[]): string[] {
   const seen = new Set<string>();
   const tags: string[] = [];
-  for (const value of values) {
-    const tag = String(value).trim().replace(/^#/, "");
+  for (const value of raw) {
+    const tag = value.trim();
     const key = tag.toLowerCase();
     if (!tag || seen.has(key)) continue;
     seen.add(key);
@@ -18,32 +26,24 @@ export function normalizeTags(raw: unknown): string[] {
   return tags;
 }
 
-/** Splits typed text into a title and its `#tags`, keeping at most `maxTags`. */
-export function parseInput(text: string, maxTags: number) {
+/** Splits text into a title and its `@tags`. */
+export function parseInput(text: string) {
   const found: string[] = [];
-  const stripped = text.replace(TAG_ANYWHERE, (_match, lead: string, tag: string) => {
+  const stripped = text.replace(TAG_ANYWHERE, (_match, _lead: string, tag: string) => {
     found.push(tag);
-    return lead;
+    return "";
   });
-  const title = found.length ? stripped.replace(/\s+/g, " ").trim() : text.trim();
-  return { title, tags: normalizeTags(found).slice(0, maxTags) };
+  return { title: stripped.trim(), tags: normalizeTags(found) };
 }
 
-/** Splits a markdown task's text into its title and the `#tags` trailing it. */
-export function splitTrailingTags(text: string) {
-  let rest = text.trimEnd();
-  const tags: string[] = [];
-  for (let m = TAG_AT_END.exec(rest); m; m = TAG_AT_END.exec(rest)) {
-    tags.unshift(m[1]);
-    rest = rest.slice(0, m.index);
-  }
-  // A line made only of tags keeps them as its title.
-  if (!rest.trim()) return { title: text, tags: [] as string[] };
-  return { title: rest, tags: normalizeTags(tags) };
+/** Like `parseInput`, for a line already in a file: a line made only of tags keeps them as its title. */
+export function splitTags(text: string) {
+  const { title, tags } = parseInput(text);
+  return title ? { title, tags } : { title: text.trim(), tags: [] as string[] };
 }
 
 export function joinTags(title: string, tags: string[]) {
-  return tags.length ? `${title} ${tags.map((t) => `#${t}`).join(" ")}` : title;
+  return tags.length ? `${title} ${tags.map((t) => `${TAG_MARKER}${t}`).join(" ")}` : title;
 }
 
 export function sameTags(a: string[], b: string[]) {
@@ -55,4 +55,26 @@ export function tagHue(tag: string) {
   let hash = 0;
   for (const ch of tag.toLowerCase()) hash = (hash * 31 + ch.codePointAt(0)!) % 360;
   return hash;
+}
+
+/** `#rrggbb` for an HSL color (h 0–359, s and l 0–100). */
+export function hslToHex(h: number, s: number, l: number) {
+  const sat = s / 100;
+  const light = l / 100;
+  const a = sat * Math.min(light, 1 - light);
+  const channel = (n: number) => {
+    const k = (n + h / 30) % 12;
+    return light - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+  };
+  return `#${[channel(0), channel(8), channel(4)]
+    .map((c) => Math.round(c * 255).toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+/**
+ * The color a tag label shows without a user choice, as hex for color pickers. Matches `.todo-panel-tag`
+ * in styles.css (keep the two in sync).
+ */
+export function defaultTagColor(tag: string, dark: boolean) {
+  return dark ? hslToHex(tagHue(tag), 70, 72) : hslToHex(tagHue(tag), 55, 38);
 }

@@ -10,8 +10,10 @@ export interface TodoGroup {
 export interface TodoSettings {
   /** Group files, in display order; there is always at least one. */
   groups: TodoGroup[];
-  /** Whether todos can carry `#tags`. */
+  /** Whether todos can carry `@tags`. */
   tags: boolean;
+  /** Chosen tag colors as `#rrggbb`, keyed by lowercase tag; other tags get a color derived from their name. */
+  tagColors: Record<string, string>;
   /** Whether the panel shows a button next to the add box that opens these settings. */
   showSettingsButton: boolean;
 }
