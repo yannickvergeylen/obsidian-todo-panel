@@ -58,7 +58,8 @@ export default class TodoPanelPlugin extends Plugin {
     }
     // Groups are always on: make sure there is a first one.
     const addedDefault = !groups.length;
-    if (addedDefault) groups.push({ path: defaultGroupPath(this.app, []) });
+    // Only the name is chosen here; the file is created when the first todo is added.
+    if (addedDefault) groups.push({ path: defaultGroupPath(this.app) });
 
     // No prototype, so tags named like `constructor` or `__proto__` are ordinary keys.
     const tagColors: Record<string, string> = Object.create(null);

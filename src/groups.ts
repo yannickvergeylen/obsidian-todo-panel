@@ -1,28 +1,12 @@
 import type { App } from "obsidian";
 import type { TodoGroup } from "./types";
 
-/** Candidate names for the first group, tried in order until one is free. */
-export const DEFAULT_GROUP_NAMES = [
-  "Todos",
-  "Tasks",
-  "To-do",
-  "To do",
-  "Todo list",
-  "Task list",
-  "Checklist",
-  "Action items",
-  "Open tasks",
-  "Backlog",
-];
-
-/** A vault path for a new group that clashes with no file and no existing group. */
-export function defaultGroupPath(app: App, taken: string[]) {
-  const free = (path: string) => !taken.includes(path) && !app.vault.getAbstractFileByPath(path);
-  for (const name of DEFAULT_GROUP_NAMES) {
-    if (free(`${name}.md`)) return `${name}.md`;
-  }
-  for (let n = 2; ; n++) {
-    if (free(`Todos ${n}.md`)) return `Todos ${n}.md`;
+/** The first free vault path among `todo.md`, `todo 2.md`, `todo 3.md`, ... (ignoring case). */
+export function defaultGroupPath(app: App) {
+  const taken = new Set(app.vault.getAllLoadedFiles().map((f) => f.path.toLowerCase()));
+  for (let n = 1; ; n++) {
+    const path = n === 1 ? "todo.md" : `todo ${n}.md`;
+    if (!taken.has(path)) return path;
   }
 }
 
