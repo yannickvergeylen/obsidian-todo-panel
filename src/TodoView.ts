@@ -1,15 +1,15 @@
 import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 import type TodoPanelPlugin from "./main";
+import { groupName } from "./groups";
 import { joinTags, parseInput, sameTags, tagHue } from "./tags";
 import { VIEW_TYPE } from "./types";
-import type { Todo } from "./types";
-
-/** Group name of todos without a tag. */
-const UNGROUPED = "";
+import type { Todo, TodoGroup } from "./types";
 
 export class TodoView extends ItemView {
-  /** Collapsed group names (lowercase); kept per view, not persisted. */
+  /** Collapsed group paths; kept per view, not persisted. */
   private collapsed = new Set<string>();
+  /** Group chosen in the add box. */
+  private addGroup?: string;
 
   constructor(leaf: WorkspaceLeaf, private plugin: TodoPanelPlugin) {
     super(leaf);
@@ -39,21 +39,31 @@ export class TodoView extends ItemView {
     this.render();
   }
 
-  private get organize() {
-    return this.plugin.settings.organize;
+  private get tagsOn() {
+    return this.plugin.settings.tags;
+  }
+
+  /** Groups exist for Markdown storage only. */
+  private get groups(): TodoGroup[] {
+    const { mode, groups } = this.plugin.settings;
+    return mode === "markdown" ? groups : [];
   }
 
   /** Tags shown (and edited) in the current mode. */
   private visibleTags(todo: Todo) {
-    if (this.organize === "tags") return todo.tags;
-    if (this.organize === "groups") return todo.tags.slice(0, 1);
-    return [];
+    return this.tagsOn ? todo.tags : [];
   }
 
-  /** Splits typed text into title and tags; plain lists leave `#` text alone. */
+  /** Splits typed text into title and tags; without tags `#` text is left alone. */
   private parse(text: string) {
-    if (this.organize === "none") return { title: text.trim(), tags: [] as string[] };
-    return parseInput(text, this.organize === "groups" ? 1 : Infinity);
+    if (!this.tagsOn) return { title: text.trim(), tags: [] as string[] };
+    return parseInput(text, Infinity);
+  }
+
+  /** The group new todos go to: the chosen one, else the first. */
+  private currentAddGroup() {
+    const groups = this.groups;
+    return groups.find((g) => g.path === this.addGroup)?.path ?? groups[0]?.path;
   }
 
   async render() {
@@ -67,24 +77,28 @@ export class TodoView extends ItemView {
     this.renderAddInput(root, todos);
 
     const list = root.createDiv({ cls: "todo-panel-list" });
-    if (this.organize === "groups") this.renderGroups(list, todos);
+    if (this.groups.length > 1) this.renderGroups(list, todos);
     else for (const todo of todos) this.renderTodo(list, list, todo, todos);
   }
 
   private renderAddInput(root: HTMLElement, todos: Todo[]) {
-    const input = root.createEl("input", {
+    const row = root.createDiv({ cls: "todo-panel-add-row" });
+    const input = row.createEl("input", {
       cls: "todo-panel-add",
-      attr: {
-        type: "text",
-        placeholder: this.organize === "none" ? "Add a todo…" : "Add a todo… (#tag)",
-      },
+      attr: { type: "text", placeholder: this.tagsOn ? "Add a todo… (#tag)" : "Add a todo…" },
     });
+    if (this.groups.length > 1) {
+      const select = row.createEl("select", { cls: "dropdown todo-panel-add-group" });
+      for (const group of this.groups) select.createEl("option", { text: groupName(group), value: group.path });
+      select.value = this.currentAddGroup() ?? "";
+      select.addEventListener("change", () => (this.addGroup = select.value));
+    }
     const suggest = root.createDiv({ cls: "todo-panel-suggest" });
     const known = [...new Map(todos.flatMap((t) => this.visibleTags(t)).map((t) => [t.toLowerCase(), t])).values()];
 
     input.addEventListener("input", () => {
       suggest.empty();
-      if (this.organize === "none") return;
+      if (!this.tagsOn) return;
       const partial = /(?:^|\s)#([^\s#]*)$/.exec(input.value);
       if (!partial) return;
       const prefix = partial[1].toLowerCase();
@@ -110,43 +124,28 @@ export class TodoView extends ItemView {
       input.value = "";
       suggest.empty();
       try {
-        await this.plugin.store.add(title, tags);
+        await this.plugin.store.add(title, tags, this.currentAddGroup());
       } catch (err) {
         new Notice(`Could not add todo: ${err}`);
       }
     });
   }
 
-  /** Renders todos under a header per first tag; untagged todos go last. */
+  /** Renders a collapsible section per group, in settings order. */
   private renderGroups(list: HTMLElement, todos: Todo[]) {
-    const groups = new Map<string, { name: string; todos: Todo[] }>();
-    for (const todo of todos) {
-      const name = todo.tags[0] ?? UNGROUPED;
-      const group = groups.get(name.toLowerCase()) ?? { name, todos: [] };
-      group.todos.push(todo);
-      groups.set(name.toLowerCase(), group);
-    }
-    const ordered = [...groups.values()].sort((a, b) => Number(a.name === UNGROUPED) - Number(b.name === UNGROUPED));
-
-    // Without any tag there is nothing to group by, so skip the header.
-    if (ordered.length === 1 && ordered[0].name === UNGROUPED) {
-      for (const todo of todos) this.renderTodo(list, list, todo, todos);
-      return;
-    }
-
-    for (const group of ordered) {
-      const key = group.name.toLowerCase();
+    for (const group of this.groups) {
+      const groupTodos = todos.filter((t) => t.group === group.path);
       const section = list.createDiv({ cls: "todo-panel-group" });
-      section.toggleClass("is-collapsed", this.collapsed.has(key));
+      section.toggleClass("is-collapsed", this.collapsed.has(group.path));
 
       const header = section.createDiv({ cls: "todo-panel-group-header" });
       header.createSpan({ cls: "todo-panel-group-arrow", text: "▾" });
-      header.createSpan({ cls: "todo-panel-group-name", text: group.name || "Ungrouped" });
-      header.createSpan({ cls: "todo-panel-group-count", text: String(group.todos.length) });
+      header.createSpan({ cls: "todo-panel-group-name", text: groupName(group) });
+      header.createSpan({ cls: "todo-panel-group-count", text: String(groupTodos.length) });
       header.addEventListener("click", () => {
-        if (this.collapsed.delete(key)) section.removeClass("is-collapsed");
+        if (this.collapsed.delete(group.path)) section.removeClass("is-collapsed");
         else {
-          this.collapsed.add(key);
+          this.collapsed.add(group.path);
           section.addClass("is-collapsed");
         }
       });
@@ -160,19 +159,12 @@ export class TodoView extends ItemView {
         e.preventDefault();
         header.removeClass("drop-target");
         const dragged = todos.find((t) => t.id === e.dataTransfer?.getData("text/plain"));
-        if (dragged) await this.moveToGroup(dragged, group.name);
+        if (dragged) await this.plugin.store.move?.(dragged, group.path, null);
       });
 
       const body = section.createDiv({ cls: "todo-panel-group-body" });
-      for (const todo of group.todos) this.renderTodo(body, list, todo, todos);
+      for (const todo of groupTodos) this.renderTodo(body, list, todo, todos);
     }
-  }
-
-  /** Makes `name` the todo's group (first tag), keeping its other tags. */
-  private async moveToGroup(todo: Todo, name: string) {
-    const rest = todo.tags.filter((t) => t.toLowerCase() !== name.toLowerCase());
-    const tags = name === UNGROUPED ? [] : [name, ...rest];
-    if (!sameTags(tags, todo.tags)) await this.plugin.store.setTags(todo, tags);
   }
 
   /** `list` is the whole list element, used to find the row being dragged. */
@@ -212,8 +204,13 @@ export class TodoView extends ItemView {
       row.removeClasses(["drop-before", "drop-after"]);
       if (!draggedId || draggedId === todo.id) return;
       const dragged = todos.find((t) => t.id === draggedId);
-      // Dropping into another group moves the todo there.
-      if (dragged && this.organize === "groups") await this.moveToGroup(dragged, todo.tags[0] ?? UNGROUPED);
+      if (dragged && todo.group && dragged.group !== todo.group) {
+        // Dropping onto a row of another group moves the todo there, next to that row.
+        const siblings = todos.filter((t) => t.group === todo.group);
+        const beforeId = after ? siblings[siblings.indexOf(todo) + 1]?.id ?? null : todo.id;
+        await this.plugin.store.move?.(dragged, todo.group, beforeId);
+        return;
+      }
       const ids = todos.map((t) => t.id).filter((id) => id !== draggedId);
       ids.splice(ids.indexOf(todo.id) + (after ? 1 : 0), 0, draggedId);
       await this.plugin.store.reorder(ids);
@@ -231,7 +228,7 @@ export class TodoView extends ItemView {
     let cancelled = false;
     // While editing, tags show as `#tag` text after the title.
     text.addEventListener("focus", () => {
-      if (this.organize === "none") return;
+      if (!this.tagsOn) return;
       text.textContent = joinTags(todo.title, this.visibleTags(todo));
       const range = document.createRange();
       range.selectNodeContents(text);
@@ -256,7 +253,7 @@ export class TodoView extends ItemView {
         return;
       }
       const { title, tags } = this.parse(text.textContent ?? "");
-      const tagsChanged = this.organize !== "none" && !sameTags(tags, this.visibleTags(todo));
+      const tagsChanged = this.tagsOn && !sameTags(tags, this.visibleTags(todo));
       if (!title || (title === todo.title && !tagsChanged)) {
         this.render();
         return;
@@ -265,7 +262,7 @@ export class TodoView extends ItemView {
       if (tagsChanged) await this.plugin.store.setTags(todo, tags);
     });
 
-    if (this.organize === "tags" && todo.tags.length) {
+    if (this.tagsOn && todo.tags.length) {
       const tagList = row.createDiv({ cls: "todo-panel-tags" });
       for (const tag of todo.tags) {
         const pill = tagList.createSpan({ cls: "todo-panel-tag", text: tag });

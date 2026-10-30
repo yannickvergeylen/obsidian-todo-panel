@@ -3,6 +3,7 @@ import { BaseStore } from "./BaseStore";
 import { MarkdownStore } from "./MarkdownStore";
 import { TodoSettingTab } from "./TodoSettingTab";
 import { TodoView } from "./TodoView";
+import { defaultGroupPath } from "./groups";
 import { DEFAULT_SETTINGS, VIEW_TYPE } from "./types";
 import type { TodoSettings, TodoStore } from "./types";
 
@@ -11,7 +12,7 @@ export default class TodoPanelPlugin extends Plugin {
   store!: TodoStore;
 
   async onload() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    await this.loadSettings();
     this.updateStore();
 
     this.registerView(VIEW_TYPE, (leaf) => new TodoView(leaf, this));
@@ -22,6 +23,33 @@ export default class TodoPanelPlugin extends Plugin {
       callback: () => this.activateView(),
     });
     this.addSettingTab(new TodoSettingTab(this.app, this));
+
+    // Keep a group pointing at its file when the file is renamed or moved.
+    this.registerEvent(
+      this.app.vault.on("rename", async (file, oldPath) => {
+        const group = this.settings.groups.find((g) => normalizePath(g.path) === oldPath);
+        if (!group) return;
+        group.path = file.path;
+        await this.saveSettings();
+      })
+    );
+  }
+
+  /** Loads settings, upgrading older versions (single `markdownFile`, `organize`). */
+  private async loadSettings() {
+    const data = (await this.loadData()) ?? {};
+    const hasGroups = Array.isArray(data.groups);
+    this.settings = {
+      mode: data.mode ?? DEFAULT_SETTINGS.mode,
+      folder: data.folder ?? DEFAULT_SETTINGS.folder,
+      tags: data.tags ?? data.organize === "tags",
+      groups: hasGroups ? data.groups : data.markdownFile ? [{ path: normalizePath(data.markdownFile) }] : [],
+    };
+    // Groups are always on: make sure there is a first one.
+    if (!this.settings.groups.length) {
+      this.settings.groups.push({ path: defaultGroupPath(this.app, []) });
+    }
+    if (!hasGroups) await this.saveData(this.settings);
   }
 
   async activateView() {
@@ -36,10 +64,14 @@ export default class TodoPanelPlugin extends Plugin {
 
   /** Rebuilds the store from the current settings and redraws open panels. */
   updateStore() {
-    const { mode, folder, markdownFile, organize } = this.settings;
+    const { mode, folder, groups, tags } = this.settings;
     this.store =
       mode === "markdown"
-        ? new MarkdownStore(this.app, normalizePath(markdownFile), organize !== "none")
+        ? new MarkdownStore(
+            this.app,
+            groups.map((g) => normalizePath(g.path)),
+            tags
+          )
         : new BaseStore(this.app, normalizePath(folder));
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
       (leaf.view as TodoView).render();

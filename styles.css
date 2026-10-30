@@ -1,6 +1,16 @@
-.todo-panel-add {
-  width: 100%;
+.todo-panel-add-row {
+  display: flex;
+  gap: var(--size-4-2);
   margin-bottom: var(--size-4-2);
+}
+
+.todo-panel-add {
+  flex: 1;
+  min-width: 0;
+}
+
+.todo-panel-add-group {
+  max-width: 40%;
 }
 
 .todo-panel-item {
