@@ -5,6 +5,8 @@ export interface TodoGroup {
   path: string;
   /** Display name; defaults to the file name. */
   alias?: string;
+  /** Whether the group is collapsed in the panel; remembered across restarts. */
+  collapsed?: boolean;
 }
 
 export interface TodoSettings {

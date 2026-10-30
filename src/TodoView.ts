@@ -6,8 +6,6 @@ import { VIEW_TYPE } from "./types";
 import type { Todo, TodoGroup } from "./types";
 
 export class TodoView extends ItemView {
-  /** Collapsed group paths; kept per view, not persisted. */
-  private collapsed = new Set<string>();
   /** Group chosen in the add box. */
   private addGroup?: string;
   /** Id of the latest render; older, slower renders drop their result. */
@@ -174,18 +172,17 @@ export class TodoView extends ItemView {
     for (const group of this.groups) {
       const groupTodos = todos.filter((t) => t.group === group.path);
       const section = list.createDiv({ cls: "todo-panel-group" });
-      section.toggleClass("is-collapsed", this.collapsed.has(group.path));
+      section.toggleClass("is-collapsed", group.collapsed === true);
 
       const header = section.createDiv({ cls: "todo-panel-group-header" });
       header.createSpan({ cls: "todo-panel-group-arrow", text: "▾" });
       header.createSpan({ cls: "todo-panel-group-name", text: groupName(group) });
       header.createSpan({ cls: "todo-panel-group-count", text: String(groupTodos.length) });
       header.addEventListener("click", () => {
-        if (this.collapsed.delete(group.path)) section.removeClass("is-collapsed");
-        else {
-          this.collapsed.add(group.path);
-          section.addClass("is-collapsed");
-        }
+        group.collapsed = group.collapsed ? undefined : true;
+        section.toggleClass("is-collapsed", group.collapsed === true);
+        // Only persisted: `saveSettings` would rebuild the store and redraw every panel.
+        this.run(() => this.plugin.saveData(this.plugin.settings));
       });
       header.addEventListener("dragover", (e) => {
         if (!list.find(".is-dragging")) return;

@@ -43,7 +43,7 @@ A group is a markdown file in your vault; its `- [ ]` lines are the todos, and e
 
 Any `- [ ]` or `* [ ]` line counts as a todo, including indented sub-tasks and lines inside code blocks. Files with Windows (CRLF) line endings work too.
 
-With more than one group the panel shows a collapsible header per group (in the order set in settings) and a group picker next to the add box. With a single group it shows a plain list.
+With more than one group the panel shows a collapsible header per group (in the order set in settings) and a group picker next to the add box. With a single group it shows a plain list. Clicking a header collapses or expands the group, and the panel remembers that across restarts: the state is saved in the plugin settings (not in your files), so it syncs wherever the settings do.
 
 The first group is created for you with the first free name from `Todos`, `Tasks`, `To-do`, `To do`, `Todo list`, `Task list`, `Checklist`, `Action items`, `Open tasks`, `Backlog` (`Todos.md`, `Tasks.md`, ...; if all are taken, `Todos 2.md`, `Todos 3.md`, ...), so it never clashes with an existing note. The name is saved in the settings, so it stays put once chosen. The file itself is created when you add the first todo. Add more groups in settings by picking an existing markdown file or typing a new path. A group shows its file name unless you give it an alias. Removing a group only removes it from the list; the file stays. Renaming or moving a group file, or a folder holding it, in Obsidian updates the group.
 

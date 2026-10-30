@@ -50,7 +50,11 @@ export default class TodoPanelPlugin extends Plugin {
       const path = normalizePath(entry.path);
       // Duplicate paths would give duplicate todo ids.
       if (groups.some((g) => g.path === path)) continue;
-      groups.push({ path, alias: typeof entry.alias === "string" ? entry.alias : undefined });
+      groups.push({
+        path,
+        alias: typeof entry.alias === "string" ? entry.alias : undefined,
+        collapsed: entry.collapsed === true ? true : undefined,
+      });
     }
     // Groups are always on: make sure there is a first one.
     const addedDefault = !groups.length;
