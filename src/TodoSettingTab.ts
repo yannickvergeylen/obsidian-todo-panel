@@ -81,7 +81,7 @@ export class TodoSettingTab extends PluginSettingTab {
 
     // The picker reports every step of a drag; save once it settles.
     const saveSettled = debounce(() => this.plugin.saveSettings(), 300, true);
-    const dark = document.body.hasClass("theme-dark");
+    const dark = containerEl.doc.body.hasClass("theme-dark");
     for (const [key, { name, count }] of [...tags].sort(([a], [b]) => a.localeCompare(b))) {
       let reset: ExtraButtonComponent;
       // Only a tag that no todo uses is removed from the list; a used one just goes back to its default color.

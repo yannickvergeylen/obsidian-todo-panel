@@ -1,14 +1,18 @@
 # Todo Panel
 
-*All your project todo lists in one sidebar panel, and still just markdown.*
+*Your project todo lists in one sidebar panel, and still just markdown.*
 
 An [Obsidian](https://obsidian.md) plugin that adds a side panel with your todo lists. Every list is a markdown file in your vault, so your todos stay plain text you can open, link and search like any other note. The panel is a convenient way to work with them: check things off, reorder by dragging, move a todo from one list to another, and tag them, without leaving the note you are in.
 
 ## Why this exists
 
-I use Obsidian as my second brain, and I keep a todo list in it for each of my projects. Switching between those files just to check something off got annoying, and some things I wanted, like easy reordering, were missing. Other apps offer them, but I like having one "brain space", and for me that is Obsidian.
+I use Obsidian as my second brain, and I keep a todo list in it for each of my projects. Switching between those files just to check something off got annoying, and some things I wanted, like easy reordering, were missing. 
 
-So I built this: a panel that pulls the todos out of the files and puts them side by side, with a bit of flexibility the files alone don't give you. Once I had started, adding features became a natural habit.
+Other apps offer them, but I like having one "brain space", and for me that is Obsidian.
+
+Other plugins exist, but they either don't support multiple lists, or they scan your whole vault for todo's. I went for control en simplicity: you choose which files are your todo lists, and the plugin only looks at those.
+
+The panel pulls the todos out of the chosen files and shows them with extra features the files alone don't give you.
 
 ## Features
 
@@ -82,7 +86,7 @@ Settings from earlier versions are upgraded on load: a single todo file becomes 
 
 The plugin is not published to the community plugin list, so install it manually.
 
-Requires Obsidian 1.4.10 or newer.
+Requires Obsidian 1.7.2 or newer.
 
 ```bash
 git clone <repo-url> obsidian-todo-panel

@@ -1,8 +1,8 @@
 {
   "id": "todo-panel",
   "name": "Todo Panel",
-  "version": "0.1.0",
-  "minAppVersion": "1.4.10",
+  "version": "0.2.0",
+  "minAppVersion": "1.7.2",
   "description": "A side panel with a simple todo list, stored as checkbox lines in markdown files in your vault.",
   "author": "Yannick Vergeylen",
   "isDesktopOnly": false
